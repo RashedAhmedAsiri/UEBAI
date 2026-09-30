@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "500mb" },
   },
   poweredByHeader: false,
+  // The site is served with `next dev`; hide the corner badge from visitors (errors still show).
+  devIndicators: false,
   async headers() {
     return [{
       source: "/:path*",

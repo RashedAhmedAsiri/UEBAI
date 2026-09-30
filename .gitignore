@@ -1,0 +1,24 @@
+node_modules/
+.next/
+out/
+# Local data: the database holds the textbooks' full text and uploads are the textbook PDFs,
+# which belong to the Ministry of Education. Only the Proof Lab results are published.
+data/*
+!data/bench/
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+# Local Claude Code settings and agent instructions
+.claude/
+CLAUDE.md
+AGENTS.md
+# Personal files kept on this computer only: build plan and log, SAIF coaching notes,
+# poster source, the SAIP copyright application and the hosting script.
+docs/PLAN.md
+docs/PROGRESS.md
+docs/saif/*.md
+docs/saif/poster/poster.html
+docs/saif/poster/assets/
+docs/saip/
+start-site.bat

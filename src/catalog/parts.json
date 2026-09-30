@@ -1,0 +1,22 @@
+{
+  "slots": {
+    "head":    { "name": { "en": "Head", "ar": "الرأس" },    "variants": ["cube", "dome", "crt_tv", "capsule", "tin_can", "lightbulb", "saucer", "radio"] },
+    "antenna": { "name": { "en": "Antenna", "ar": "الهوائي" }, "variants": ["single_ball", "twin_balls", "dish", "propeller", "lightning_rod", "none"] },
+    "ears":    { "name": { "en": "Ears", "ar": "الأذنان" },  "variants": ["bolts", "headphones", "radar", "none"] },
+    "torso":   { "name": { "en": "Torso", "ar": "الجذع" },   "variants": ["barrel", "box", "oval", "radio", "vending", "boiler"] },
+    "chest":   { "name": { "en": "Chest panel", "ar": "لوحة الصدر" }, "variants": ["dials", "gauge", "tape_reels", "heart", "keypad", "blank"] },
+    "arms":    { "name": { "en": "Arms", "ar": "الذراعان" }, "variants": ["tubes", "springs", "pistons", "noodle"] },
+    "hands":   { "name": { "en": "Hands", "ar": "اليدان" },  "variants": ["claws", "mitts", "grippers", "suction"] },
+    "base":    { "name": { "en": "Base", "ar": "القاعدة" },  "variants": ["legs", "wheel", "treads", "hover", "pogo"] }
+  },
+  "face": {
+    "eyes":  ["pixel_dots", "ovals", "visor", "anime", "glasses", "cyclops"],
+    "mouth": ["none", "line", "grille", "equalizer"],
+    "screenColors": ["#7CFFB2", "#FFB347", "#6EC6FF", "#FF8AD8", "#FFFFFF"]
+  },
+  "materials": [
+    "polished_chrome", "brushed_steel", "painted_enamel", "toy_plastic", "copper", "brass",
+    "gold", "rusty_iron", "wood_panel", "carbon_fiber", "rubber"
+  ],
+  "paint": ["#E8413C", "#F2B632", "#3E7CB1", "#57B846", "#8E5CC7", "#F07FB0", "#2BB3B1", "#F4F1E8", "#C9CED3", "#3A3F44", "#E87A2C", "#7FD1F0"]
+}

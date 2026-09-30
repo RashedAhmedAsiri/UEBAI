@@ -1,0 +1,14 @@
+{
+  "files": ["samples/biology-basics.md", "samples/life-science-notes.md"],
+  "shared_topics": ["Mammals", "Photosynthesis"],
+  "questions": [
+    { "q": "Which mammals lay eggs?", "topic": "Mammals" },
+    { "q": "What is a marsupial?", "topic": "Mammals" },
+    { "q": "What does chlorophyll do?", "topic": "Photosynthesis" },
+    { "q": "Where does photosynthesis happen in the cell?", "topic": "Photosynthesis" },
+    { "q": "What do mitochondria do?", "topic": "Cell Structure" },
+    { "q": "Why do birds have hollow bones?", "topic": "Birds" },
+    { "q": "How do reptiles stay warm?", "topic": "Reptiles" },
+    { "q": "What is fermentation?", "topic": "Cellular Respiration" }
+  ]
+}

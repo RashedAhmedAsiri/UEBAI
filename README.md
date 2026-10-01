@@ -31,6 +31,10 @@ Adding the teacher's slides as a second source merged 27 slide topics into exist
 
 Sign in to GitHub, open the link and press **Create codespace**. It installs everything, starts the site, and opens it in a new tab (first start takes a few minutes). Next time, open it from github.com/codespaces and it keeps your teachers and books. For real AI answers, paste a `GEMINI_API_KEY` into the optional box on the create page, or add it later at github.com/settings/codespaces → *Secrets* and restart the codespace.
 
+### Share it from your computer (Windows, public link)
+
+Install [Node.js](https://nodejs.org) (LTS), then double-click **`share-online.bat`**. The first time it asks for your Gemini API key and an optional visitor password (both saved in `.env.local`, never uploaded). It builds the site, starts it, and opens a free Cloudflare link (`https://….trycloudflare.com`, no account needed) that anyone can open. The link is copied to the clipboard. Keep the window open and the computer on; closing the window stops the site. The link changes every start. Without a password, every visitor's questions use your key's quota.
+
 ### On your computer
 
 Requirements: Node.js 20+ (tested on Node 24).

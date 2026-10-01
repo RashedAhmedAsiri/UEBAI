@@ -449,7 +449,8 @@ h1, h2, h3, h4 { font-family: var(--font-head); margin: 0; line-height: 1.1; }
 @keyframes bubbles { to { background-position: -32px 0, 0 0; } }
 
 /* ---------- Conveyor belt stepper ---------- */
-.conveyor { position: relative; padding: 10px 14px 26px; border-radius: 12px; }
+/* The bottom padding is the robot's lane on the belt, so it never covers a step name. */
+.conveyor { position: relative; padding: 10px 14px 44px; border-radius: 12px; }
 .conveyor .belt {
   position: absolute; left: 14px; right: 14px; bottom: 10px; height: 14px; border-radius: 7px;
   background: repeating-linear-gradient(90deg, #2b2f33 0 10px, #3c4247 10px 12px);
@@ -465,7 +466,7 @@ h1, h2, h3, h4 { font-family: var(--font-head); margin: 0; line-height: 1.1; }
 .conveyor .station.done .lamp { background: radial-gradient(circle at 35% 30%, #d7ffcf, #22a312); box-shadow: 0 0 8px #33e61f; }
 .conveyor .station.current .lamp { background: radial-gradient(circle at 35% 30%, #fff3c4, #f2b632); box-shadow: 0 0 10px #ffd34d; animation: pulse 1s infinite alternate; }
 .conveyor .station.current { color: #000; }
-.conveyor .bot { position: absolute; bottom: 14px; font-size: 22px; transition: inset-inline-start .6s cubic-bezier(.4,1.4,.5,1); margin-inline-start: -12px; }
+.conveyor .bot { position: absolute; bottom: 16px; font-size: 22px; line-height: 1; transition: inset-inline-start .6s cubic-bezier(.4,1.4,.5,1); margin-inline-start: -12px; }
 @keyframes pulse { to { filter: brightness(1.3); } }
 
 /* ---------- Folder modal ---------- */

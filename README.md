@@ -25,6 +25,14 @@ Adding the teacher's slides as a second source merged 27 slide topics into exist
 
 ## Run it
 
+### In the browser, from anywhere (GitHub Codespaces)
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/RashedAhmedAsiri/UEBAI)
+
+Sign in to GitHub, open the link and press **Create codespace**. It installs everything, starts the site, and opens it in a new tab (first start takes a few minutes). Next time, open it from github.com/codespaces and it keeps your teachers and books. For real AI answers, paste a `GEMINI_API_KEY` into the optional box on the create page, or add it later at github.com/settings/codespaces → *Secrets* and restart the codespace.
+
+### On your computer
+
 Requirements: Node.js 20+ (tested on Node 24).
 
 ```bash

@@ -1,0 +1,33 @@
+{
+  // Opens UEBAI in GitHub Codespaces: installs, starts the site, and opens it in a new tab.
+  "name": "UEBAI",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+  "postCreateCommand": "npm ci",
+  "postAttachCommand": {
+    "site": "npm run dev"
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "UEBAI",
+      // A new tab, not the editor's preview pane: the site sends X-Frame-Options: DENY.
+      "onAutoForward": "openBrowser"
+    }
+  },
+  // Optional. Without a key the site runs in demo mode.
+  "secrets": {
+    "GEMINI_API_KEY": {
+      "description": "Free key for real AI answers: aistudio.google.com → Get API key.",
+      "documentationUrl": "https://aistudio.google.com/apikey"
+    },
+    "ANTHROPIC_API_KEY": {
+      "description": "Paid Claude key (used instead of Gemini when set): console.anthropic.com.",
+      "documentationUrl": "https://console.anthropic.com/settings/keys"
+    }
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["README.md"]
+    }
+  }
+}

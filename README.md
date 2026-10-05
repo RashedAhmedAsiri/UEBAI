@@ -23,6 +23,12 @@ Adding the teacher's slides as a second source merged 27 slide topics into exist
 - Raw Proof Lab results: [`data/bench/`](data/bench/) · answer keys: [`eval/bench/`](eval/bench/)
 - The textbooks themselves are **not** included: they belong to the Ministry of Education. To re-run an experiment, upload your own copy of the book in the app.
 
+## Host it online (Render)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rashedahmedasiri/uebai)
+
+Click the button, sign in to Render, paste your `GEMINI_API_KEY` and choose a `SITE_PASSWORD` (visitors need it to get in), then **Apply**. The settings live in [`render.yaml`](render.yaml). On the free plan, teachers and uploaded books are reset whenever the service restarts; see the note in `render.yaml` for keeping them.
+
 ## Run it
 
 Requirements: Node.js 20+ (tested on Node 24).

@@ -1,0 +1,24 @@
+# One-click hosting on Render (render.com → New → Blueprint, or the "Deploy to Render" link in README.md).
+# Render asks for GEMINI_API_KEY and SITE_PASSWORD when you deploy; they are never stored in the repo.
+# Free plan note: the free instance has no persistent disk, so teachers and uploaded books are reset
+# whenever the service restarts or redeploys. For lasting data, switch to a paid plan and add a disk
+# mounted at /var/data with ROBOPROF_DATA_DIR=/var/data.
+services:
+  - type: web
+    name: uebai
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npx next start -H 0.0.0.0 -p $PORT
+    healthCheckPath: /api/status
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ROBOPROF_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SITE_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true

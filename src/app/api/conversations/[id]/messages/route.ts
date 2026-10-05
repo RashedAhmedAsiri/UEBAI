@@ -1,5 +1,8 @@
 import { answer } from "@/lib/server/answer";
 import { fail } from "@/lib/server/teachers";
+import { syncDb } from "@/lib/server/db";
+
+export const maxDuration = 300;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -7,6 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** SSE stream; events: route, token, tool, citation, meter, robot_state, done, error. */
 export async function POST(req: Request, { params }: Ctx) {
+  await syncDb();
   const { id } = await params;
   const { content } = (await req.json().catch(() => ({}))) as { content?: string };
   const question = content?.trim().slice(0, 4000);

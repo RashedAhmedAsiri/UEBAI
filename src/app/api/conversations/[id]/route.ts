@@ -1,9 +1,12 @@
-import { db, removeWhere, save } from "@/lib/server/db";
+import { db, removeWhere, save, syncDb } from "@/lib/server/db";
 import { fail, json } from "@/lib/server/teachers";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, { params }: Ctx) {
+  await syncDb();
   const d = db();
   const { id } = await params;
   const conversation = d.conversations.find((c) => c.id === id);
@@ -14,6 +17,7 @@ export async function GET(_: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_: Request, { params }: Ctx) {
+  await syncDb();
   const d = db();
   const id = (await params).id;
   removeWhere(d.messages, (m) => m.conversation_id === id);

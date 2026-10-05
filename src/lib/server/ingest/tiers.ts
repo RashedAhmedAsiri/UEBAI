@@ -145,12 +145,14 @@ function extractiveNotes(topic: Topic, sources: Map<string, Source>, ar: boolean
 }
 
 /** Build Tier 3 → Tier 2 → Tier 1 for the given (dirty) topics. */
-export async function buildTiers(topicIds: string[], onProgress: (done: number, total: number, title: string) => void) {
+/** Returns false when `shouldStop` cut it short (the unfinished topics stay dirty). */
+export async function buildTiers(topicIds: string[], onProgress: (done: number, total: number, title: string) => void, shouldStop?: () => boolean): Promise<boolean> {
   const d = db();
   const sources = new Map(d.sources.map((s) => [s.id, s]));
   const topics = topicIds.map((id) => d.topics.find((t) => t.id === id)).filter((t): t is Topic => !!t);
-  let done = 0;
+  let done = 0, stopped = false;
   await pMap(topics, isLive() ? 4 : 8, async (topic) => {
+    if (stopped || shouldStop?.()) { stopped = true; return; }
     const teacher = d.teachers.find((t) => t.id === topic.teacher_id)!;
     refreshSourceRefs(topic);
     buildPassages(topic);
@@ -165,6 +167,7 @@ export async function buildTiers(topicIds: string[], onProgress: (done: number, 
     save();
     onProgress(++done, topics.length, topic.title);
   });
+  return !stopped;
 }
 
 async function buildCard(topic: Topic, teacher: Teacher) {

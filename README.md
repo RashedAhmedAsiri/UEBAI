@@ -23,11 +23,13 @@ Adding the teacher's slides as a second source merged 27 slide topics into exist
 - Raw Proof Lab results: [`data/bench/`](data/bench/) · answer keys: [`eval/bench/`](eval/bench/)
 - The textbooks themselves are **not** included: they belong to the Ministry of Education. To re-run an experiment, upload your own copy of the book in the app.
 
-## Host it online (Render)
+## Host it online (Vercel)
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rashedahmedasiri/uebai)
+1. Go to [vercel.com/new](https://vercel.com/new), sign in with GitHub and **Import** this repository.
+2. Under **Environment Variables** add `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`) and a `SITE_PASSWORD` (visitors type it to get in, so strangers can't use up your AI quota). Click **Deploy**.
+3. In the new project open **Storage** → **Upstash for Redis** (free plan) → create it and **Connect** it to the project. Then **Deployments** → ⋯ → **Redeploy**.
 
-Click the button, sign in to Render, paste your `GEMINI_API_KEY` and choose a `SITE_PASSWORD` (visitors need it to get in), then **Apply**. The settings live in [`render.yaml`](render.yaml). On the free plan, teachers and uploaded books are reset whenever the service restarts; see the note in `render.yaml` for keeping them.
+Your site is at `https://<project>.vercel.app`. How it works when hosted: Vercel's disk is temporary, so the database and uploaded books are kept in the Redis database instead of `data/`; books are uploaded in 3 MB parts; filing a book runs in slices of ~3 minutes while its progress is on screen (keep the page open until it says *Filed!*). The Proof Lab shows the saved results but runs new experiments only on your own computer. The free Redis plan holds 256 MB — roughly a handful of textbooks.
 
 ## Run it
 

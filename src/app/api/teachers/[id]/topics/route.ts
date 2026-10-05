@@ -1,10 +1,13 @@
-import { db } from "@/lib/server/db";
+import { db, syncDb } from "@/lib/server/db";
 import { topicTree } from "@/lib/server/library";
 import { fail, getTeacher, json } from "@/lib/server/teachers";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   const log = db().merge_log.filter((m) => m.teacher_id === t.id).slice(-60).reverse()

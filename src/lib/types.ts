@@ -128,10 +128,20 @@ export interface IngestReport {
   skipped_paragraphs: number;
 }
 
+/** Where an interrupted ingestion picks up (hosted runs work in time slices). */
+export interface IngestCheckpoint {
+  stage: "detect" | "canonicalize" | "tiers";
+  skipped?: number;
+  /** Topic-detection results per batch index (stage "detect"). */
+  batches?: Record<number, { title: string; aliases: string[]; description: string; unit: string; paragraphIds: string[] }[]>;
+  topic_ids?: string[];
+  report?: IngestReport;
+}
+
 export interface Job {
   id: string;
   type: "ingest" | "rebuild";
-  payload: { source_id?: string; teacher_id: string; topic_ids?: string[] };
+  payload: { source_id?: string; teacher_id: string; topic_ids?: string[]; resume?: IngestCheckpoint };
   status: "queued" | "running" | "done" | "failed";
   attempts: number;
   error: string | null;

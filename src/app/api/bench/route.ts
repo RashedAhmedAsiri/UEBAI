@@ -1,12 +1,16 @@
-import { db } from "@/lib/server/db";
+import { db, syncDb } from "@/lib/server/db";
 import { fail, json } from "@/lib/server/teachers";
 import { createRun, listDatasets, listRuns } from "@/lib/server/bench/runner";
 import { ZodError } from "zod";
+import { BENCH_LOCAL_ONLY, hosted } from "@/lib/server/kv";
+
+export const maxDuration = 300;
 
 export const runtime = "nodejs";
 
 /** Proof Lab home: past runs, question sets, and the teachers whose books can be tested. */
 export async function GET() {
+  await syncDb();
   const d = db();
   const teachers = d.teachers
     .map((t) => {
@@ -30,6 +34,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  await syncDb();
+  if (hosted()) return fail(BENCH_LOCAL_ONLY);
   const body = await req.json().catch(() => null);
   try {
     return json({ run: createRun(body) }, 201);

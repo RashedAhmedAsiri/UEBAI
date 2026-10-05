@@ -13,6 +13,17 @@ interface Estimate { pages: number; tokens: number; scanned: boolean; live: bool
 const BAND: Record<string, string> = { pdf: "#d11c1c", docx: "#2b5c8a", pptx: "#d9661f", epub: "#6b2c8e", txt: "#5a5a5a", md: "#2e7d32" };
 const KIND: Record<string, string> = { pdf: "PDF", docx: "Word", pptx: "Slides", epub: "E-book", txt: "Text", md: "Notes", markdown: "Notes", png: "Image", jpg: "Image", jpeg: "Image", webp: "Image", gif: "Image" };
 
+const PART_BYTES = 3 * 1024 * 1024; // same as the server's limit per part
+
+function uploadId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  // Not a secure context (plain http on a LAN address): build a v4-style id by hand.
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 /** Inbox tray: upload → estimate → confirm → live progress with the "reading" animation. */
 export function SourcesTray({ teacherId, onChange }: { teacherId: string; onChange?: () => void }) {
   const { t, tm, n } = useI18n();
@@ -31,10 +42,17 @@ export function SourcesTray({ teacherId, onChange }: { teacherId: string; onChan
     return d.sources;
   }, [teacherId]);
 
-  const watch = useCallback((jobId: string) => {
-    if (streams.current[jobId]) return;
+  const alive = useRef(true);
+  const watch = useCallback(function watchJob(jobId: string, retries = 0) {
+    if (streams.current[jobId] || !alive.current) return;
     const es = new EventSource(`/api/jobs/${jobId}/stream`);
     streams.current[jobId] = es;
+    let ended = false;
+    // The hosted site works in time slices: the stream pauses between them and we reconnect.
+    const reconnect = (delay: number) => {
+      es.close(); delete streams.current[jobId];
+      if (!ended && retries < 300) setTimeout(() => watchJob(jobId, retries + 1), delay);
+    };
     es.addEventListener("progress", (e) => {
       const d = JSON.parse((e as MessageEvent).data) as { status: string; progress: Job["progress"]; error: string | null };
       setProgress((p) => ({ ...p, [jobId]: { ...d.progress, status: d.status, error: d.error } }));
@@ -42,17 +60,23 @@ export function SourcesTray({ teacherId, onChange }: { teacherId: string; onChan
     });
     es.addEventListener("end", (e) => {
       const d = JSON.parse((e as MessageEvent).data) as { status: string };
+      ended = true;
       es.close(); delete streams.current[jobId];
       if (d.status === "done") { play("stamp"); toast(t("Filed into the Topic Library! 🗄️")); } else { play("error"); }
       void load(); onChange?.();
     });
-    es.onerror = () => { es.close(); delete streams.current[jobId]; };
+    es.addEventListener("pause", () => reconnect(300));
+    es.onerror = (e) => {
+      if ((e as MessageEvent).data) ended = true; // the server reported an error (e.g. job not found)
+      reconnect(3000);
+    };
   }, [load, onChange, t]);
 
   useEffect(() => {
+    alive.current = true;
     void load().then((list) => list.forEach((s) => { if (s.job && (s.job.status === "queued" || s.job.status === "running")) watch(s.job.id); }));
     const all = streams.current;
-    return () => Object.values(all).forEach((es) => es.close());
+    return () => { alive.current = false; Object.values(all).forEach((es) => es.close()); };
   }, [load, watch]);
 
   const upload = async (files: FileList | File[]) => {
@@ -60,9 +84,12 @@ export function SourcesTray({ teacherId, onChange }: { teacherId: string; onChan
       setUploading(file.name);
       play("paper");
       try {
-        const fd = new FormData();
-        fd.append("file", file);
-        const d = await api<{ duplicate?: boolean; message?: string; source: Source; estimate?: Estimate }>(`/api/teachers/${teacherId}/sources`, { method: "POST", body: fd });
+        // Sent in parts: hosting platforms cap the size of one request.
+        const id = uploadId(), parts = Math.max(1, Math.ceil(file.size / PART_BYTES));
+        for (let n = 0; n < parts; n++) await api(`/api/uploads/${id}/${n}`, { method: "PUT", body: file.slice(n * PART_BYTES, (n + 1) * PART_BYTES) });
+        const d = await api<{ duplicate?: boolean; message?: string; source: Source; estimate?: Estimate }>(`/api/teachers/${teacherId}/sources`, {
+          method: "POST", json: { upload_id: id, parts, filename: file.name },
+        });
         if (d.duplicate) toast(t("“{file}” is already in the library — skipped.", { file: file.name }));
         else if (d.estimate) setPending((p) => [...p, { source: d.source, estimate: d.estimate!, label: d.source.label }]);
       } catch (e) { toast(tm((e as Error).message), "error"); }

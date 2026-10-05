@@ -1,10 +1,13 @@
-import { db } from "@/lib/server/db";
+import { db, syncDb } from "@/lib/server/db";
 import { deleteTopic, updateTopic } from "@/lib/server/library";
 import { fail, json } from "@/lib/server/teachers";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, { params }: Ctx) {
+  await syncDb();
   const d = db();
   const { id } = await params;
   const topic = d.topics.find((t) => t.id === id);
@@ -20,6 +23,7 @@ export async function GET(_: Request, { params }: Ctx) {
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
+  await syncDb();
   try {
     const body = await req.json();
     return json({ topic: updateTopic((await params).id, body) });
@@ -29,6 +33,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_: Request, { params }: Ctx) {
+  await syncDb();
   try {
     deleteTopic((await params).id);
     return json({ ok: true });

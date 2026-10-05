@@ -7,6 +7,7 @@ import { after } from "next/server";
 import { hashNormalized, repairPdfArabic } from "../text";
 import { pruneOrphanTopics } from "../ingest/prune";
 import { hosted, kv } from "./kv";
+import { DB_CHUNK, DB_HEAD_KEY, dbChunkKey, type DbHead } from "../storage-format";
 import { DATA_DIR, UPLOAD_DIR, removeStoredFile } from "./files";
 import type { DB } from "../types";
 
@@ -26,7 +27,7 @@ const EMPTY: DB = {
   passages: [], merge_log: [], jobs: [], conversations: [], messages: [],
 };
 
-interface Head { ver: string; n: number }
+type Head = DbHead;
 type G = typeof globalThis & {
   __roboprofDb?: DB; __roboprofSaveTimer?: NodeJS.Timeout | null;
   __uebaiHead?: Head | null; __uebaiDirty?: boolean; __uebaiHolds?: number;
@@ -76,9 +77,7 @@ export function save(immediate = false) {
 
 // ---------- Hosted mode (Redis) ----------
 
-const HEAD_KEY = "uebai:db:head";
-const CHUNK = 3_000_000; // base64 chars per Redis value (requests stay well under Upstash's size limit)
-const chunkKey = (h: Head, i: number) => `uebai:db:${h.ver}:${i}`;
+const HEAD_KEY = DB_HEAD_KEY, CHUNK = DB_CHUNK, chunkKey = dbChunkKey;
 
 /**
  * Call at the start of every API route. Locally a no-op. Hosted: loads the database (or a newer

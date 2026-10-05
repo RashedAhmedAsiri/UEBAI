@@ -29,6 +29,8 @@ Adding the teacher's slides as a second source merged 27 slide topics into exist
 2. Under **Environment Variables** add `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`) and a `SITE_PASSWORD` (visitors type it to get in, so strangers can't use up your AI quota). Click **Deploy**.
 3. In the new project open **Storage** → **Upstash for Redis** (free plan) → create it and **Connect** it to the project. Then **Deployments** → ⋯ → **Redeploy**.
 
+4. *(Optional)* Copy the teachers and books you already filed on your computer to the online site, so nothing has to be uploaded again: in the Upstash database's page in Vercel open the **.env.local** tab, copy its lines into a new file named `.env.online` next to `package.json`, then run `npm run push-online` on your computer (add `-- --replace` if the online site already has data). Keep the site password on if the books are textbooks you may not publish.
+
 Your site is at `https://<project>.vercel.app`. How it works when hosted: Vercel's disk is temporary, so the database and uploaded books are kept in the Redis database instead of `data/`; books are uploaded in 3 MB parts; filing a book runs in slices of ~3 minutes while its progress is on screen (keep the page open until it says *Filed!*). The Proof Lab shows the saved results but runs new experiments only on your own computer. The free Redis plan holds 256 MB — roughly a handful of textbooks.
 
 ## Run it

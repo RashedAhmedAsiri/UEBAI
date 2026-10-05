@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { after } from "next/server";
 import { hosted, kv } from "./kv";
+import { kvStoragePath, PART_BYTES, partKey } from "../storage-format";
 
 /**
  * Uploaded files. The browser sends a file in parts of at most PART_BYTES (hosting platforms cap
@@ -18,7 +19,7 @@ export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 const PARTS_DIR = path.join(UPLOAD_DIR, ".parts");
 const TMP_DIR = path.join(os.tmpdir(), "uebai-files");
 
-export const PART_BYTES = 3 * 1024 * 1024;
+export { PART_BYTES };
 export const MAX_PARTS = 200;
 const UPLOAD_ID = /^[0-9a-f-]{36}$/;
 
@@ -26,7 +27,6 @@ export function validUpload(uploadId: string, parts: number): boolean {
   return UPLOAD_ID.test(uploadId) && Number.isInteger(parts) && parts >= 1 && parts <= MAX_PARTS;
 }
 
-const partKey = (uploadId: string, n: number) => `uebai:up:${uploadId}:${n}`;
 const partFile = (uploadId: string, n: number) => path.join(PARTS_DIR, `${uploadId}.${n}`);
 
 export async function putUploadPart(uploadId: string, n: number, buf: Buffer) {
@@ -68,7 +68,7 @@ export async function keepUpload(upload: { id: string; parts: number } | null, s
       parts = Math.max(1, Math.ceil(buf.length / PART_BYTES));
       for (let n = 0; n < parts; n++) await kv("SET", partKey(uploadId, n), buf.subarray(n * PART_BYTES, (n + 1) * PART_BYTES).toString("base64"));
     }
-    const storagePath = `kv:${uploadId}:${parts}:${ext}`;
+    const storagePath = kvStoragePath(uploadId, parts, ext);
     fs.mkdirSync(TMP_DIR, { recursive: true });
     fs.writeFileSync(tmpPath(storagePath), buf);
     return storagePath;

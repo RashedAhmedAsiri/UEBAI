@@ -1,12 +1,15 @@
-import fs from "node:fs";
-import { db, removeWhere, save } from "@/lib/server/db";
+import { db, removeWhere, save, syncDb } from "@/lib/server/db";
+import { removeStoredFile } from "@/lib/server/files";
 import { enqueue } from "@/lib/server/jobs";
 import { fail, json } from "@/lib/server/teachers";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /** Remove a source; its topics lose those paragraphs and are rebuilt (or removed if empty). */
 export async function DELETE(_: Request, { params }: Ctx) {
+  await syncDb();
   const d = db();
   const { id } = await params;
   const source = d.sources.find((s) => s.id === id);
@@ -26,7 +29,7 @@ export async function DELETE(_: Request, { params }: Ctx) {
   removeWhere(d.paragraphs, (p) => p.source_id === source.id);
   removeWhere(d.units, (u) => u.teacher_id === source.teacher_id && !d.topics.some((t) => t.unit_id === u.id));
   removeWhere(d.sources, (s) => s.id === source.id);
-  try { fs.rmSync(source.storage_path, { force: true }); } catch { /* ignore */ }
+  void removeStoredFile(source.storage_path);
   save();
   const remaining = rebuild.filter((id) => !empty.has(id));
   if (remaining.length) enqueue("rebuild", { teacher_id: source.teacher_id, topic_ids: remaining });

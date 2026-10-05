@@ -26,7 +26,7 @@ function keysInSource(): string[] {
 }
 
 // Tokens that may legitimately stay in Latin script inside Arabic text.
-const ALLOWED_LATIN = /ANTHROPIC_API_KEY|GEMINI_API_KEY|DEEPSEEK_API_KEY|UEBAI|\.env\.local|Esc/g;
+const ALLOWED_LATIN = /ANTHROPIC_API_KEY|GEMINI_API_KEY|DEEPSEEK_API_KEY|UEBAI|\.env\.local|Esc|Vercel|Upstash Redis|Storage/g; // (Vercel/Upstash: product and tab names shown in English)
 
 describe("Arabic-first i18n", () => {
   it("every UI string used in the code has an Arabic translation", () => {

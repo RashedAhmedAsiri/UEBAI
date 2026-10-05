@@ -1,6 +1,7 @@
 import "server-only";
 import { db, now, pruneOrphanTopics, save, uid } from "../db";
 import { extract } from "./extract";
+import { materialize } from "../files";
 import { buildTiers, pMap } from "./tiers";
 import { cleanPages, renderSection, sectionTokens, toParagraphs, toSections, type Section } from "../../ingest/structure";
 import { decideBySimilarity, isRelation, offlineJudge, type Relation } from "../../ingest/merge";
@@ -8,7 +9,8 @@ import { completeJson, isLive } from "../../ai/provider";
 import { mergeJudgePrompt, topicDetectionPrompt } from "../../ai/prompts";
 import { LEVEL_TEXT } from "../../ai/personality";
 import { normalizeForSearch, sentences, topicSimilarity } from "../../text";
-import type { IngestReport, JobProgress, MergeLogEntry, Paragraph, Source, Teacher, Topic } from "../../types";
+import { SliceYield, sliceExpired } from "../slice";
+import type { IngestCheckpoint, IngestReport, JobProgress, MergeLogEntry, Paragraph, Source, Teacher, Topic } from "../../types";
 
 interface Candidate {
   title: string;
@@ -20,43 +22,59 @@ interface Candidate {
 
 type Progress = (p: Partial<JobProgress>) => void;
 
-export async function ingestSource(sourceId: string, progress: Progress): Promise<IngestReport> {
+/** Saves where an interrupted run continues (see IngestCheckpoint). */
+export interface Checkpoint {
+  get(): IngestCheckpoint | undefined;
+  set(r: IngestCheckpoint): Promise<void>;
+}
+
+export async function ingestSource(sourceId: string, progress: Progress, ckpt?: Checkpoint): Promise<IngestReport> {
   const d = db();
   const source = d.sources.find((s) => s.id === sourceId);
   if (!source) throw new Error("Source not found");
   const teacher = d.teachers.find((t) => t.id === source.teacher_id)!;
+  const resume = ckpt?.get();
+  if (resume?.stage === "tiers" && resume.report) return writeNotes(resume.topic_ids ?? [], resume.report, progress);
 
-  // Restart-safe: drop anything a previous failed attempt left behind for this source — its
-  // paragraphs, and the topics it filed that never got notes (they'd spin "being rewritten…" forever).
-  d.paragraphs = d.paragraphs.filter((p) => p.source_id !== sourceId);
-  pruneOrphanTopics(d, teacher.id);
+  let kept: Paragraph[], skipped: number;
+  if (resume?.stage === "detect") {
+    // Paragraphs were stored before the previous slice ran out of time.
+    kept = d.paragraphs.filter((p) => p.source_id === sourceId).sort((a, b) => a.idx - b.idx);
+    skipped = resume.skipped ?? 0;
+  } else {
+    // Restart-safe: drop anything a previous failed attempt left behind for this source — its
+    // paragraphs, and the topics it filed that never got notes (they'd spin "being rewritten…" forever).
+    d.paragraphs = d.paragraphs.filter((p) => p.source_id !== sourceId);
+    pruneOrphanTopics(d, teacher.id);
 
-  // 2. Extract
-  source.status = "extracting";
-  progress({ stage: "extract", pct: 5, message: `Reading ${source.filename}…` });
-  const ex = await extract(source.storage_path, source.mime);
-  source.pages = ex.pageCount;
+    // 2. Extract
+    source.status = "extracting";
+    progress({ stage: "extract", pct: 5, message: `Reading ${source.filename}…` });
+    const ex = await extract(await materialize(source.storage_path), source.mime);
+    source.pages = ex.pageCount;
 
-  // 3. Clean  4. Structural split (numbered paragraphs, page markers)
-  progress({ stage: "clean", pct: 15, message: `Cleaning ${ex.pageCount} pages…` });
-  const pages = cleanPages(ex.pages);
-  const { paragraphs } = toParagraphs(pages);
-  if (!paragraphs.length) throw new Error("No readable text was found in this file.");
+    // 3. Clean  4. Structural split (numbered paragraphs, page markers)
+    progress({ stage: "clean", pct: 15, message: `Cleaning ${ex.pageCount} pages…` });
+    const pages = cleanPages(ex.pages);
+    const { paragraphs } = toParagraphs(pages);
+    if (!paragraphs.length) throw new Error("No readable text was found in this file.");
 
-  // 5. Exact dedup against paragraphs already stored for this teacher
-  const existingHashes = new Set(d.paragraphs.filter((p) => p.teacher_id === teacher.id).map((p) => p.norm_hash));
-  const kept: Paragraph[] = [];
-  let skipped = 0;
-  for (const p of paragraphs) {
-    if (existingHashes.has(p.norm_hash)) { skipped++; continue; }
-    existingHashes.add(p.norm_hash);
-    kept.push({ id: uid(), teacher_id: teacher.id, source_id: source.id, idx: p.idx, page: p.page, text: p.text, norm_hash: p.norm_hash, heading: p.heading });
-  }
-  d.paragraphs.push(...kept);
-  save();
-  if (!kept.length) {
-    progress({ stage: "dedup", pct: 100, message: "Everything in this file is already in the library." });
-    return { pages: ex.pageCount, topics: 0, new_topics: 0, merged: 0, new_units: 0, skipped_paragraphs: skipped };
+    // 5. Exact dedup against paragraphs already stored for this teacher
+    const existingHashes = new Set(d.paragraphs.filter((p) => p.teacher_id === teacher.id).map((p) => p.norm_hash));
+    kept = [];
+    skipped = 0;
+    for (const p of paragraphs) {
+      if (existingHashes.has(p.norm_hash)) { skipped++; continue; }
+      existingHashes.add(p.norm_hash);
+      kept.push({ id: uid(), teacher_id: teacher.id, source_id: source.id, idx: p.idx, page: p.page, text: p.text, norm_hash: p.norm_hash, heading: p.heading });
+    }
+    d.paragraphs.push(...kept);
+    save();
+    if (!kept.length) {
+      progress({ stage: "dedup", pct: 100, message: "Everything in this file is already in the library." });
+      return { pages: ex.pageCount, topics: 0, new_topics: 0, merged: 0, new_units: 0, skipped_paragraphs: skipped };
+    }
+    await ckpt?.set({ stage: "detect", skipped, batches: {} });
   }
 
   // 6. Topic detection
@@ -64,36 +82,54 @@ export async function ingestSource(sourceId: string, progress: Progress): Promis
   const sections = toSections(kept.map((p) => ({ ...p })), source.label);
   progress({ stage: "topics", pct: 25, message: `Finding topics in ${sections.length} sections…` });
   const byIdx = new Map(kept.map((p) => [p.idx, p]));
+  const cache = resume?.stage === "detect" ? resume.batches ?? {} : {};
   const candidates = isLive()
-    ? await detectTopicsLive(sections, teacher, byIdx, (done, total) =>
+    ? await detectTopicsLive(sections, teacher, byIdx, cache, (done, total) =>
         progress({ stage: "topics", pct: 25 + Math.round((done / total) * 30), message: `Finding topics… (${done}/${total})` }))
     : detectTopicsOffline(sections, source);
+  if (!candidates) {
+    await ckpt?.set({ stage: "detect", skipped, batches: cache });
+    throw new SliceYield();
+  }
 
-  // 7. Canonicalize & merge
+  // 7. Canonicalize & merge (not resumable: if it is cut off, the next attempt starts over)
+  await ckpt?.set({ stage: "canonicalize" });
   progress({ stage: "merge", pct: 58, message: `Filing ${candidates.length} topics…` });
   const unitsBefore = d.units.filter((u) => u.teacher_id === teacher.id).length;
   const { dirty, merged, created } = await canonicalize(candidates, teacher, source, (done) =>
     progress({ stage: "merge", pct: 58 + Math.round((done / candidates.length) * 12), message: `Filing topics… (${done}/${candidates.length})` }));
   save();
 
-  // 8. Build tiers for dirty topics only
-  progress({ stage: "tiers", pct: 70, message: `Writing study notes for ${dirty.length} topics…` });
-  await buildTiers(dirty, (done, total, title) =>
-    progress({ stage: "tiers", pct: 70 + Math.round((done / total) * 28), message: `Notes: ${title} (${done}/${total})` }));
-
   const report: IngestReport = {
-    pages: ex.pageCount,
+    pages: source.pages,
     topics: dirty.length,
     new_topics: created,
     merged,
     new_units: d.units.filter((u) => u.teacher_id === teacher.id).length - unitsBefore,
     skipped_paragraphs: skipped,
   };
+  await ckpt?.set({ stage: "tiers", topic_ids: dirty, report });
+  return writeNotes(dirty, report, progress, ckpt);
+}
+
+// 8. Build tiers for dirty topics only
+async function writeNotes(topicIds: string[], report: IngestReport, progress: Progress, ckpt?: Checkpoint): Promise<IngestReport> {
+  const todo = topicIds.filter((id) => db().topics.some((t) => t.id === id && t.dirty));
+  const doneBefore = topicIds.length - todo.length;
+  progress({ stage: "tiers", pct: 70, message: `Writing study notes for ${topicIds.length} topics…` });
+  const finished = await buildTiers(todo, (done, _total, title) =>
+    progress({ stage: "tiers", pct: 70 + Math.round(((doneBefore + done) / topicIds.length) * 28), message: `Notes: ${title} (${doneBefore + done}/${topicIds.length})` }), sliceExpired);
+  if (!finished) {
+    await ckpt?.set({ stage: "tiers", topic_ids: topicIds, report });
+    throw new SliceYield();
+  }
   return report;
 }
 
 /** Batch sections into ~6k-token prompts, run topic detection with the small model. */
-async function detectTopicsLive(sections: Section[], teacher: Teacher, byIdx: Map<number, Paragraph>, onProgress: (d: number, t: number) => void): Promise<Candidate[]> {
+async function detectTopicsLive(
+  sections: Section[], teacher: Teacher, byIdx: Map<number, Paragraph>, cache: Record<number, Candidate[]>, onProgress: (d: number, t: number) => void,
+): Promise<Candidate[] | null> {
   const batches: Section[][] = [[]];
   let size = 0;
   for (const s of sections) {
@@ -101,10 +137,12 @@ async function detectTopicsLive(sections: Section[], teacher: Teacher, byIdx: Ma
     if (size + t > 6000 && batches[batches.length - 1].length) { batches.push([]); size = 0; }
     batches[batches.length - 1].push(s); size += t;
   }
-  let done = 0;
+  let done = Object.keys(cache).length, stopped = false;
   const subject = teacher.subject.name || "general";
   const level = LEVEL_TEXT[teacher.subject.level];
-  const results = await pMap(batches, 4, async (batch) => {
+  const results = await pMap(batches, 4, async (batch, bi) => {
+    if (cache[bi]) return cache[bi];
+    if (stopped || sliceExpired()) { stopped = true; return []; } // out of time: finish in the next slice
     const text = batch.map(renderSection).join("\n\n");
     const { data } = await completeJson<unknown>({ role: "digest", maxTokens: 4000, messages: [{ role: "user", content: topicDetectionPrompt(subject, level, text) }] });
     onProgress(++done, batches.length);
@@ -144,9 +182,10 @@ async function detectTopicsLive(sections: Section[], teacher: Teacher, byIdx: Ma
       }
       if (bestDist <= 3) best.paragraphIds.push(p.id);
     }
+    cache[bi] = cands;
     return cands;
   });
-  return results.flat();
+  return stopped ? null : results.flat();
 }
 
 /** Demo mode: one topic per heading section (consecutive same-title sections combined). */

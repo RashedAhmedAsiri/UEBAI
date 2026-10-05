@@ -7,6 +7,7 @@ data/*
 !data/bench/
 .env
 .env.local
+.env.online
 *.tsbuildinfo
 next-env.d.ts
 # Local Claude Code settings and agent instructions

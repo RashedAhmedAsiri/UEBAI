@@ -1,11 +1,14 @@
-import { db, save } from "@/lib/server/db";
+import { db, save, syncDb } from "@/lib/server/db";
 import { enqueue } from "@/lib/server/jobs";
 import { fail, json } from "@/lib/server/teachers";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /** User confirmed the cost estimate → enqueue ingestion. Optional body: { label }. */
 export async function POST(req: Request, { params }: Ctx) {
+  await syncDb();
   const d = db();
   const { id } = await params;
   const source = d.sources.find((s) => s.id === id);

@@ -1,7 +1,9 @@
-import { db } from "@/lib/server/db";
+import { db, syncDb } from "@/lib/server/db";
 import { acceptNotes, proposeNotes } from "@/lib/server/library";
 import { fail, json } from "@/lib/server/teachers";
 import { describeAiError } from "@/lib/ai/provider";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -10,6 +12,7 @@ type Ctx = { params: Promise<{ id: string }> };
  * POST again with {accept: notes} to save the chosen version.
  */
 export async function POST(req: Request, { params }: Ctx) {
+  await syncDb();
   const id = (await params).id;
   const body = (await req.json().catch(() => ({}))) as { accept?: string };
   try {

@@ -706,4 +706,8 @@ export const AR: Record<string, string> = {
   "Invalid model name": "اسم النموذج غير صالح",
   "Write your name first": "اكتب اسمك أولًا",
   "Rating does not match this question's answers": "التقييم لا يطابق إجابات هذا السؤال",
+  "The Proof Lab only runs experiments on your own computer. The online site shows saved results.": "مختبر الإثبات يُجري التجارب على حاسوبك فقط. الموقع على الإنترنت يعرض النتائج المحفوظة.",
+  "Part of the upload is missing — please upload the file again.": "جزء من الملف المرفوع مفقود — ارفع الملف مرة أخرى.",
+  "Bad upload part": "جزء رفع غير صالح",
+  "This site has no database yet. In Vercel open the project → Storage → connect an Upstash Redis database, then redeploy.": "لا توجد قاعدة بيانات لهذا الموقع بعد. افتح المشروع في Vercel ← Storage ← اربط قاعدة بيانات Upstash Redis ثم أعد النشر.",
 };

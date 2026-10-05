@@ -1,13 +1,15 @@
-import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { db, now, save, uid, UPLOAD_DIR } from "@/lib/server/db";
+import { db, now, save, syncDb, uid } from "@/lib/server/db";
+import { discardUpload, keepUpload, materialize, readUpload, removeStoredFile, validUpload } from "@/lib/server/files";
 import { fail, getTeacher, json } from "@/lib/server/teachers";
 import { extract, mimeFor, SUPPORTED_EXT } from "@/lib/server/ingest/extract";
 import { estimateTokens } from "@/lib/text";
 import { MODELS, price } from "@/lib/ai/models";
 import { isLive } from "@/lib/ai/provider";
 import { requestHasSession } from "@/lib/auth";
+
+export const maxDuration = 300;
 
 export const runtime = "nodejs";
 type Ctx = { params: Promise<{ id: string }> };
@@ -36,37 +38,54 @@ function estimateCost(tokens: number) {
 }
 
 /** Upload → fingerprint → estimate. Processing starts only after the user confirms. */
+/**
+ * Two ways in: a multipart form with `file`, or JSON { upload_id, parts, filename } naming a file
+ * the browser already sent in parts to /api/uploads (needed when hosted: request bodies are capped).
+ */
 export async function POST(req: Request, { params }: Ctx) {
   // Not covered by proxy (it would buffer 500 MB uploads in memory), so check the session here.
   if (!requestHasSession(req)) return fail("Please sign in", 401);
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
-  const form = await req.formData();
-  const file = form.get("file");
-  if (!(file instanceof File)) return fail("No file uploaded");
-  if (file.size > MAX_BYTES) return fail("File is larger than 500 MB");
-  const ext = path.extname(file.name).toLowerCase();
-  if (!SUPPORTED_EXT.includes(ext)) return fail(`Unsupported file type ${ext}. Try PDF, DOCX, PPTX, EPUB, TXT, MD or an image.`);
 
-  const buf = Buffer.from(await file.arrayBuffer());
+  let name: string, buf: Buffer, upload: { id: string; parts: number } | null = null;
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const body = (await req.json().catch(() => ({}))) as { upload_id?: string; parts?: number; filename?: string };
+    if (!body.upload_id || !body.parts || !body.filename || !validUpload(body.upload_id, body.parts)) return fail("No file uploaded");
+    upload = { id: body.upload_id, parts: body.parts };
+    name = body.filename;
+    try { buf = await readUpload(upload.id, upload.parts); } catch (err) { return fail(err instanceof Error ? err.message : String(err)); }
+  } else {
+    const file = (await req.formData()).get("file");
+    if (!(file instanceof File)) return fail("No file uploaded");
+    if (file.size > MAX_BYTES) return fail("File is larger than 500 MB");
+    name = file.name;
+    buf = Buffer.from(await file.arrayBuffer());
+  }
+  const drop = () => upload ? discardUpload(upload.id, upload.parts) : Promise.resolve();
+  const file = { name, size: buf.length };
+  if (file.size > MAX_BYTES) { await drop(); return fail("File is larger than 500 MB"); }
+  const ext = path.extname(file.name).toLowerCase();
+  if (!SUPPORTED_EXT.includes(ext)) { await drop(); return fail(`Unsupported file type ${ext}. Try PDF, DOCX, PPTX, EPUB, TXT, MD or an image.`); }
+
   const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
   const d = db();
   const dup = d.sources.find((s) => s.teacher_id === t.id && s.sha256 === sha256 && s.status !== "failed");
-  if (dup) return json({ duplicate: true, source: dup, message: `"${file.name}" is already in ${t.name}'s library — skipped.` });
+  if (dup) { await drop(); return json({ duplicate: true, source: dup, message: `"${file.name}" is already in ${t.name}'s library — skipped.` }); }
 
   const id = uid();
-  const storage_path = path.join(UPLOAD_DIR, `${id}${ext}`);
-  fs.writeFileSync(storage_path, buf);
+  const storage_path = await keepUpload(upload, id, ext, buf);
   const mime = mimeFor(file.name);
 
   let pages = 1, tokens = 0, scanned = false;
   try {
-    const ex = await extract(storage_path, mime, { allowOcr: false });
+    const ex = await extract(await materialize(storage_path), mime, { allowOcr: false });
     pages = ex.pageCount;
     tokens = ex.pages.reduce((n, p) => n + estimateTokens(p.text), 0);
     if (tokens < pages * 10) { scanned = true; tokens = pages * 600; }
   } catch (err) {
-    fs.rmSync(storage_path, { force: true });
+    await removeStoredFile(storage_path);
     return fail(`Could not read this file: ${err instanceof Error ? err.message : String(err)}`);
   }
 

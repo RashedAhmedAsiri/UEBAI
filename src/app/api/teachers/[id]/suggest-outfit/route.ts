@@ -2,11 +2,15 @@ import { fail, getTeacher, json } from "@/lib/server/teachers";
 import { ITEMS, THEME_PACKS, matchThemePack, sanitizeWardrobe, wardrobeFromIds } from "@/lib/catalog";
 import { completeJson, isLive, describeAiError } from "@/lib/ai/provider";
 import { outfitPrompt } from "@/lib/ai/prompts";
+import { syncDb } from "@/lib/server/db";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /** "Dress for my subject": theme pack if one matches, otherwise the small model picks catalog IDs only. */
 export async function POST(req: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   const body = (await req.json().catch(() => ({}))) as { subject?: string };

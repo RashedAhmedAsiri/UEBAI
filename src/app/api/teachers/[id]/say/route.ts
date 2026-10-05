@@ -3,6 +3,9 @@ import { oneShot } from "@/lib/server/answer";
 import { greetingPrompt } from "@/lib/ai/prompts";
 import { describeAiError } from "@/lib/ai/provider";
 import { PersonalitySchema } from "@/lib/schemas";
+import { syncDb } from "@/lib/server/db";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,6 +14,7 @@ type Ctx = { params: Promise<{ id: string }> };
  * Personality Lab preview chat (kind=preview, with an unsaved personality draft).
  */
 export async function POST(req: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   const body = (await req.json().catch(() => ({}))) as {

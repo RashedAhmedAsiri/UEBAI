@@ -1,10 +1,13 @@
-import { deleteTeacherCascade, db, now, save } from "@/lib/server/db";
+import { deleteTeacherCascade, db, now, save, syncDb } from "@/lib/server/db";
 import { fail, getTeacher, json, teacherSummary } from "@/lib/server/teachers";
 import { TeacherPatchSchema } from "@/lib/schemas";
+
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   const sources = db().sources.filter((s) => s.teacher_id === t.id);
@@ -12,6 +15,7 @@ export async function GET(_: Request, { params }: Ctx) {
 }
 
 export async function PATCH(req: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   const parsed = TeacherPatchSchema.safeParse(await req.json());
@@ -29,6 +33,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 }
 
 export async function DELETE(_: Request, { params }: Ctx) {
+  await syncDb();
   const t = getTeacher((await params).id);
   if (!t) return fail("Teacher not found", 404);
   deleteTeacherCascade(t.id);

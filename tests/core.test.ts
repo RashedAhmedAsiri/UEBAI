@@ -8,7 +8,7 @@ import { decideBySimilarity, offlineJudge, relabelRefs } from "@/lib/ingest/merg
 import { cleanPages, toParagraphs, toSections, chunkPassages, headingLevel } from "@/lib/ingest/structure";
 import { hashNormalized, normalizeForSearch, topicSimilarity, extractJson, Bm25, estimateTokens, stripInternalIds, stripTashkeel } from "@/lib/text";
 import { speechText } from "@/lib/client/tts";
-import type { Teacher } from "@/lib/types";
+import type { DB, Teacher } from "@/lib/types";
 
 describe("reply cleanup", () => {
   const id = "4783dbbb-e471-442d-b824-00a0eb4293a6";
@@ -181,5 +181,27 @@ describe("bm25", () => {
   it("ranks the relevant doc first", () => {
     const idx = new Bm25([{ id: "a", text: "Mammals have hair and produce milk" }, { id: "b", text: "Plants photosynthesize using chlorophyll" }]);
     expect(idx.search("which animals make milk?")[0].id).toBe("a");
+  });
+});
+
+describe("starter pack", () => {
+  it("adds valid teachers, each with topic cards and a sample chat", async () => {
+    const { addStarterPack } = await import("@/lib/starter");
+    const d: DB = { teachers: [], sources: [], units: [], topics: [], topic_links: [], paragraphs: [], passages: [], merge_log: [], jobs: [], conversations: [], messages: [] };
+    const added = addStarterPack(d);
+    expect(added).toBeGreaterThanOrEqual(4);
+    expect(d.teachers).toHaveLength(added);
+    for (const t of d.teachers) {
+      expect(RobotConfigSchema.parse(t.robot_config)).toEqual(t.robot_config);
+      PersonalitySchema.parse(t.personality);
+      const topics = d.topics.filter((x) => x.teacher_id === t.id);
+      expect(topics.length).toBeGreaterThan(0);
+      for (const x of topics) expect(x.notes_md).toMatch(/^### (Summary|الملخص)\n.+\n\n### .+\n- /);
+      const conv = d.conversations.find((c) => c.teacher_id === t.id)!;
+      const msgs = d.messages.filter((m) => m.conversation_id === conv.id);
+      expect(msgs[0].role).toBe("user");
+      expect(msgs.at(-1)!.role).toBe("assistant");
+      expect(msgs.filter((m) => m.role === "assistant").every((m) => m.topic_ids.every((id) => topics.some((x) => x.id === id)))).toBe(true);
+    }
   });
 });

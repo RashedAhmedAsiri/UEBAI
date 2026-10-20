@@ -9,6 +9,7 @@ import { pruneOrphanTopics } from "../ingest/prune";
 import { hosted, kv } from "./kv";
 import { DB_CHUNK, DB_HEAD_KEY, dbChunkKey, type DbHead } from "../storage-format";
 import { DATA_DIR, UPLOAD_DIR, removeStoredFile } from "./files";
+import { addStarterPack } from "../starter";
 import type { DB } from "../types";
 
 /**
@@ -17,9 +18,11 @@ import type { DB } from "../types";
  * so it is kept gzipped in Redis instead; every API route calls syncDb() first, which loads it
  * (or picks up a newer copy written by another server instance) and flushes changes after the
  * response. Every access goes through db()/save().
+ * Hosted on Vercel without a database, the site still opens: it runs on an in-memory copy holding
+ * the starter teachers, and nothing a visitor changes is kept.
  */
 export { DATA_DIR, UPLOAD_DIR };
-const NO_STORAGE = "This site has no database yet. In Vercel open the project → Storage → connect an Upstash Redis database, then redeploy.";
+const NO_STORAGE = "This site has no database yet, so it shows the starter teachers and keeps no changes. To keep your own teachers and books, open the project in Vercel → Storage → connect an Upstash Redis database, then redeploy.";
 const DB_FILE = path.join(DATA_DIR, "db.json");
 
 const EMPTY: DB = {
@@ -38,7 +41,12 @@ const g = globalThis as G;
 export function db(): DB {
   if (!g.__roboprofDb) {
     if (hosted()) throw new Error("Database not loaded yet (the route must call syncDb() first).");
-    if (process.env.VERCEL) throw new Error(NO_STORAGE);
+    if (memoryOnly()) {
+      console.warn(`[db] ${NO_STORAGE}`);
+      g.__roboprofDb = structuredClone(EMPTY);
+      migrate(g.__roboprofDb);
+      return g.__roboprofDb;
+    }
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     if (fs.existsSync(DB_FILE)) {
       const loaded = JSON.parse(fs.readFileSync(DB_FILE, "utf8")) as Partial<DB>;
@@ -51,9 +59,23 @@ export function db(): DB {
       }
     } else {
       g.__roboprofDb = structuredClone(EMPTY);
+      migrate(g.__roboprofDb);
+      fs.writeFileSync(DB_FILE, JSON.stringify(g.__roboprofDb));
     }
   }
   return g.__roboprofDb;
+}
+
+/** Hosted on Vercel with no database connected: its disk is read-only and temporary. */
+const memoryOnly = () => Boolean(process.env.VERCEL) && !hosted();
+
+/** The same ids on every server instance, so links between pages work when nothing is stored. */
+function stableIds() {
+  let n = 0;
+  return () => {
+    const h = crypto.createHash("sha256").update(`uebai-starter-${n++}`).digest("hex");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  };
 }
 
 export function save(immediate = false) {
@@ -65,6 +87,7 @@ export function save(immediate = false) {
     else g.__roboprofSaveTimer = setTimeout(flush, 1000);
     return;
   }
+  if (memoryOnly()) return;
   const write = () => {
     g.__roboprofSaveTimer = null;
     const tmp = DB_FILE + ".tmp";
@@ -99,7 +122,11 @@ async function load(): Promise<void> {
     const head = raw ? (JSON.parse(raw) as Head) : null;
     if (g.__roboprofDb && head?.ver === g.__uebaiHead?.ver) return;
     if (!head) {
-      g.__roboprofDb ??= structuredClone(EMPTY);
+      if (!g.__roboprofDb) {
+        g.__roboprofDb = structuredClone(EMPTY);
+        migrate(g.__roboprofDb);
+        g.__uebaiDirty = true;
+      }
       return;
     }
     const parts = await Promise.all(Array.from({ length: head.n }, (_, i) => kv<string | null>("GET", chunkKey(head, i))));
@@ -179,6 +206,12 @@ function migrate(d: DB): string[] {
     if (removed) console.log(`[db] removed ${removed} empty topics left by failed ingestion attempts`);
     d.meta.orphan_prune = 1;
     applied.push("orphan-prune");
+  }
+  if ((d.meta.starter_pack ?? 0) < 1) {
+    // Ready-made teachers with topic cards and a sample chat, added once (deleting them is final).
+    addStarterPack(d, memoryOnly() ? stableIds() : uid, now());
+    d.meta.starter_pack = 1;
+    applied.push("starter-pack");
   }
   return applied;
 }

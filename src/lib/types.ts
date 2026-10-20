@@ -197,7 +197,7 @@ export interface DB {
   conversations: Conversation[];
   messages: Message[];
   /** Applied data migrations (see migrate() in server/db.ts). */
-  meta?: { text_repair?: number; orphan_prune?: number };
+  meta?: { text_repair?: number; orphan_prune?: number; starter_pack?: number };
 }
 
 export type RobotState = "idle" | "listening" | "thinking" | "talking" | "happy" | "surprised" | "proud" | "confused" | "sleeping" | "booting";
